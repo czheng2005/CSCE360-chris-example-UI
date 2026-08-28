@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="csce360chrisexampleui.client/csce360chrisexampleui.client.esproj">
+    <Build />
+    <Deploy />
+  </Project>
+  <Project Path="csce360ChrisExampleUI.Server/csce360ChrisExampleUI.Server.csproj" />
+</Solution>
