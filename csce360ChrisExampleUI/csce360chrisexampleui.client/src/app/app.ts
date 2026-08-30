@@ -1,12 +1,5 @@
-import { HttpClient } from '@angular/common/http';
 import { Component, OnInit, signal } from '@angular/core';
-
-interface WeatherForecast {
-  date: string;
-  temperatureC: number;
-  temperatureF: number;
-  summary: string;
-}
+import { Product, ProductService } from './product.service';
 
 @Component({
   selector: 'app-root',
@@ -15,23 +8,30 @@ interface WeatherForecast {
   styleUrl: './app.css'
 })
 export class App implements OnInit {
-  public forecasts: WeatherForecast[] = [];
+  public products: Product[] = [];
+  public loading = true;
+  public error: string | null = null;
 
-  constructor(private http: HttpClient) {}
+  constructor(private productService: ProductService) {}
 
   ngOnInit() {
-    this.getForecasts();
+    this.getProducts();
   }
 
-  getForecasts() {
-    this.http.get<WeatherForecast[]>('/weatherforecast').subscribe(
-      (result) => {
-        this.forecasts = result;
+  getProducts() {
+    this.loading = true;
+    this.error = null;
+    this.productService.getProducts().subscribe({
+      next: (result) => {
+        this.products = result;
+        this.loading = false;
       },
-      (error) => {
-        console.error(error);
+      error: (err) => {
+        console.error(err);
+        this.error = 'Could not load products.';
+        this.loading = false;
       }
-    );
+    });
   }
 
   protected readonly title = signal('csce360chrisexampleui.client');

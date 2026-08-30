@@ -12,6 +12,13 @@ EXPOSE 8081
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
+
+# Install Node.js (required by the Angular client's build during dotnet build/publish)
+RUN apt-get update && \
+    apt-get install -y curl && \
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get install -y nodejs && \
+    rm -rf /var/lib/apt/lists/*
 COPY ["csce360ChrisExampleUI.Server/csce360ChrisExampleUI.Server.csproj", "csce360ChrisExampleUI.Server/"]
 COPY ["csce360chrisexampleui.client/csce360chrisexampleui.client.esproj", "csce360chrisexampleui.client/"]
 RUN dotnet restore "./csce360ChrisExampleUI.Server/csce360ChrisExampleUI.Server.csproj"

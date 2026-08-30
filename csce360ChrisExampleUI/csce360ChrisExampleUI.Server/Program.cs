@@ -6,6 +6,13 @@ builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
+builder.Services.AddHttpClient("ProductApi", client =>
+{
+    var baseUrl = builder.Configuration["ProductApi:BaseUrl"]
+        ?? throw new InvalidOperationException("Configuration value 'ProductApi:BaseUrl' was not found.");
+    client.BaseAddress = new Uri(baseUrl);
+});
+
 var app = builder.Build();
 
 app.UseDefaultFiles();
