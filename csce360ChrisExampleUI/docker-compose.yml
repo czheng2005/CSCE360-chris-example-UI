@@ -1,0 +1,6 @@
+services:
+  csce360chrisexampleui.server:
+    image: ${DOCKER_REGISTRY-}csce360chrisexampleuiserver
+    build:
+      context: .
+      dockerfile: csce360ChrisExampleUI.Server/Dockerfile
