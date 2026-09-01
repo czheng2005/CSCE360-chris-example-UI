@@ -8,9 +8,12 @@ import { Product, ProductService } from './product.service';
   styleUrl: './app.css'
 })
 export class App implements OnInit {
-  public products: Product[] = [];
-  public loading = true;
-  public error: string | null = null;
+  // Define state as reactive signals
+  public products = signal<Product[]>([]);
+  public loading = signal(true);
+  public error = signal<string | null>(null);
+  
+  protected readonly title = signal('csce360chrisexampleui.client');
 
   constructor(private productService: ProductService) {}
 
@@ -19,20 +22,20 @@ export class App implements OnInit {
   }
 
   getProducts() {
-    this.loading = true;
-    this.error = null;
+    this.loading.set(true);
+    this.error.set(null);
+    
     this.productService.getProducts().subscribe({
       next: (result) => {
-        this.products = result;
-        this.loading = false;
+        // Ensure 'result' is actually an array here. If it's wrapped, use result.propertyName
+        this.products.set(result);
+        this.loading.set(false);
       },
       error: (err) => {
         console.error(err);
-        this.error = 'Could not load products.';
-        this.loading = false;
+        this.error.set('Could not load products.');
+        this.loading.set(false);
       }
     });
   }
-
-  protected readonly title = signal('csce360chrisexampleui.client');
 }
