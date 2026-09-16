@@ -18,6 +18,13 @@ export interface ProductFilters {
   companyName?: string;
 }
 
+export interface NlSearchResult {
+  summary: string;
+  products: Product[];
+}
+
+
+
 @Injectable({
   providedIn: 'root'
 })
@@ -55,4 +62,8 @@ export class ProductService {
   getCompanies(): Observable<string[]> {
     return this.http.get<string[]>('/companies');
   }
+
+  nlSearch(query: string): Observable<NlSearchResult> {
+  return this.http.post<NlSearchResult>('/products/nl-search', { query });
+}
 }

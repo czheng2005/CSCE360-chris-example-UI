@@ -17,7 +17,32 @@
     </button>
   </form>
 
-  @if (message) {
-    <p class="nl-search__message">{{ message }}</p>
+  @if (errorMessage) {
+    <p class="error">{{ errorMessage }}</p>
+  }
+
+  @if (summary) {
+    <p class="nl-search__message">{{ summary }}</p>
+  }
+
+  @if (results.length > 0) {
+    <table>
+      <thead>
+        <tr>
+          <th>Company</th><th>Product</th><th>Category</th><th>Price</th><th>On Sale</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (product of results; track product.productName) {
+          <tr>
+            <td>{{ product.companyName }}</td>
+            <td>{{ product.productName }}</td>
+            <td>{{ product.category }}</td>
+            <td>{{ product.price | currency }}</td>
+            <td>{{ product.onSale ? 'Yes' : 'No' }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
   }
 </div>

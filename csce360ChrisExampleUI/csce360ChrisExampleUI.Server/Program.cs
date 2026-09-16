@@ -1,3 +1,6 @@
+using csce360ChrisExampleUI.Server.Mcp;
+using csce360ChrisExampleUI.Server.Services;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -13,8 +16,21 @@ builder.Services.AddHttpClient("ProductApi", client =>
     client.BaseAddress = new Uri(baseUrl);
 });
 
+builder.Services.AddHttpClient("Anthropic", client =>
+{
+    client.BaseAddress = new Uri("https://api.anthropic.com/");
+});
+
+builder.Services
+    .AddMcpServer()
+    .WithHttpTransport()
+    .WithTools<ProductTools>();
+
+builder.Services.AddScoped<NaturalLanguageSearchService>();
+
 var app = builder.Build();
 
+app.MapMcp("/mcp");
 app.UseDefaultFiles();
 app.MapStaticAssets();
 

@@ -1,4 +1,5 @@
 import { Component } from '@angular/core';
+import { Product, ProductService } from '../product.service';
 
 @Component({
   selector: 'app-nl-search',
@@ -9,24 +10,31 @@ import { Component } from '@angular/core';
 export class NlSearch {
   query = '';
   submitting = false;
-  message: string | null = null;
+  errorMessage: string | null = null;
+  summary: string | null = null;
+  results: Product[] = [];
+
+  constructor(private productService: ProductService) {}
 
   onSubmit(): void {
     const trimmed = this.query.trim();
-    if (!trimmed) {
-      return;
-    }
+    if (!trimmed) return;
 
     this.submitting = true;
-    this.message = null;
+    this.errorMessage = null;
+    this.summary = null;
 
-    // TODO: replace this stub with a call to the BFF's MCP-backed
-    // natural-language filter endpoint once the LLM tool integration
-    // is wired up (e.g. POST /Products/nl-search -> LLM -> Product/search).
-    setTimeout(() => {
-      this.submitting = false;
-      this.message =
-        'Natural language search is coming soon — this will use an LLM to translate your query into product filters.';
-    }, 400);
+    this.productService.nlSearch(trimmed).subscribe({
+      next: (result) => {
+        this.summary = result.summary;
+        this.results = result.products;
+        this.submitting = false;
+      },
+      error: (err) => {
+        console.error(err);
+        this.errorMessage = 'Something went wrong running that search.';
+        this.submitting = false;
+      }
+    });
   }
 }
