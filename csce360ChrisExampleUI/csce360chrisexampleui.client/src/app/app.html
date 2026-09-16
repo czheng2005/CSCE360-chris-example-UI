@@ -1,75 +1,43 @@
-﻿﻿<h1 id="tableLabel">Products</h1>
-
-<div class="filters">
-  <div class="filter-field">
-    <label for="category">Category</label>
-    <select id="category" name="category" [(ngModel)]="selectedCategory" (ngModelChange)="onFilterChange()">
-      <option value="">All</option>
-      @for (c of categories(); track c) {
-        <option [value]="c">{{ c }}</option>
-      }
-    </select>
-  </div>
-
-  <div class="filter-field">
-    <label for="company">Company</label>
-    <select id="company" name="company" [(ngModel)]="selectedCompany" (ngModelChange)="onFilterChange()">
-      <option value="">All</option>
-      @for (c of companies(); track c) {
-        <option [value]="c">{{ c }}</option>
-      }
-    </select>
-  </div>
-
-  <div class="filter-field">
-    <label for="minPrice">Min price</label>
-    <input id="minPrice" name="minPrice" type="number" [(ngModel)]="minPrice" (ngModelChange)="onFilterChange()" />
-  </div>
-
-  <div class="filter-field">
-    <label for="maxPrice">Max price</label>
-    <input id="maxPrice" name="maxPrice" type="number" [(ngModel)]="maxPrice" (ngModelChange)="onFilterChange()" />
-  </div>
-
-  <div class="filter-field checkbox">
-    <label>
-      <input type="checkbox" name="onSaleOnly" [(ngModel)]="onSaleOnly" (ngModelChange)="onFilterChange()" />
-      On sale only
-    </label>
-  </div>
-
-  <button type="button" (click)="clearFilters()">Clear filters</button>
+﻿﻿<div class="app-header">
+  <h1 id="tableLabel">Products</h1>
+  <button type="button" class="view-toggle" (click)="toggleView()">
+    {{ view() === 'form' ? 'Switch to AI Search' : 'Switch to Filter Form' }}
+  </button>
 </div>
 
-@if (loading()) {
-  <p><em>Loading...</em></p>
-} @else if (error()) {
-  <p class="error">{{ error() }}</p>
+@if (view() === 'form') {
+  @if (loading()) {
+    <p><em>Loading...</em></p>
+  } @else if (error()) {
+    <p class="error">{{ error() }}</p>
+  } @else {
+    <table>
+      <thead>
+        <tr>
+          <th>Company</th>
+          <th>Product</th>
+          <th>Category</th>
+          <th>Price</th>
+          <th>On Sale</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (product of products(); track product.productName) {
+          <tr>
+            <td>{{ product.companyName }}</td>
+            <td>{{ product.productName }}</td>
+            <td>{{ product.category }}</td>
+            <td>{{ product.price | currency }}</td>
+            <td>{{ product.onSale ? 'Yes' : 'No' }}</td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="5">No products found.</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
 } @else {
-  <table>
-    <thead>
-      <tr>
-        <th>Company</th>
-        <th>Product</th>
-        <th>Category</th>
-        <th>Price</th>
-        <th>On Sale</th>
-      </tr>
-    </thead>
-    <tbody>
-      @for (product of products(); track product.productName) {
-        <tr>
-          <td>{{ product.companyName }}</td>
-          <td>{{ product.productName }}</td>
-          <td>{{ product.category }}</td>
-          <td>{{ product.price | currency }}</td>
-          <td>{{ product.onSale ? 'Yes' : 'No' }}</td>
-        </tr>
-      } @empty {
-        <tr>
-          <td colspan="5">No products found.</td>
-        </tr>
-      }
-    </tbody>
-  </table>
+  <app-nl-search></app-nl-search>
 }

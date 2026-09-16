@@ -5,10 +5,12 @@ import { FormsModule } from '@angular/forms';
 
 import { AppRoutingModule } from './app-routing-module';
 import { App } from './app';
+import { NlSearch } from './nl-search/nl-search';
 
 @NgModule({
   declarations: [
-    App
+    App,
+    NlSearch
   ],
   imports: [
     BrowserModule, HttpClientModule, FormsModule,

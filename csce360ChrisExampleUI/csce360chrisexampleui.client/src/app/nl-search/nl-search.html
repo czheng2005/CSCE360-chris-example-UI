@@ -1,0 +1,23 @@
+<div class="nl-search">
+  <p class="nl-search__intro">
+    Describe what you're looking for in plain language, e.g. "cheap electronics on sale from Acme Co".
+  </p>
+
+  <form class="nl-search__form" (ngSubmit)="onSubmit()">
+    <textarea
+      class="nl-search__input"
+      rows="3"
+      placeholder="e.g. show me on-sale hardware under $30"
+      [(ngModel)]="query"
+      name="query"
+    ></textarea>
+
+    <button type="submit" class="nl-search__submit" [disabled]="submitting || !query.trim()">
+      {{ submitting ? 'Thinking…' : 'Search' }}
+    </button>
+  </form>
+
+  @if (message) {
+    <p class="nl-search__message">{{ message }}</p>
+  }
+</div>
