@@ -7,6 +7,8 @@ const PROXY_CONFIG = [
   {
     context: [
       "/products",
+      "/categories",
+      "/companies",
     ],
     target: "http://localhost:8082",
     secure: false

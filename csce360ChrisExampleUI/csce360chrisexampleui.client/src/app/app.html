@@ -1,4 +1,45 @@
-﻿<h1 id="tableLabel">Products</h1>
+﻿﻿<h1 id="tableLabel">Products</h1>
+
+<div class="filters">
+  <div class="filter-field">
+    <label for="category">Category</label>
+    <select id="category" name="category" [(ngModel)]="selectedCategory" (ngModelChange)="onFilterChange()">
+      <option value="">All</option>
+      @for (c of categories(); track c) {
+        <option [value]="c">{{ c }}</option>
+      }
+    </select>
+  </div>
+
+  <div class="filter-field">
+    <label for="company">Company</label>
+    <select id="company" name="company" [(ngModel)]="selectedCompany" (ngModelChange)="onFilterChange()">
+      <option value="">All</option>
+      @for (c of companies(); track c) {
+        <option [value]="c">{{ c }}</option>
+      }
+    </select>
+  </div>
+
+  <div class="filter-field">
+    <label for="minPrice">Min price</label>
+    <input id="minPrice" name="minPrice" type="number" [(ngModel)]="minPrice" (ngModelChange)="onFilterChange()" />
+  </div>
+
+  <div class="filter-field">
+    <label for="maxPrice">Max price</label>
+    <input id="maxPrice" name="maxPrice" type="number" [(ngModel)]="maxPrice" (ngModelChange)="onFilterChange()" />
+  </div>
+
+  <div class="filter-field checkbox">
+    <label>
+      <input type="checkbox" name="onSaleOnly" [(ngModel)]="onSaleOnly" (ngModelChange)="onFilterChange()" />
+      On sale only
+    </label>
+  </div>
+
+  <button type="button" (click)="clearFilters()">Clear filters</button>
+</div>
 
 @if (loading()) {
   <p><em>Loading...</em></p>

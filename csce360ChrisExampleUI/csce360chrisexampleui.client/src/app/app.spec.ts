@@ -25,6 +25,10 @@ describe('App', () => {
   });
 
   it('should create the app', () => {
+    component.ngOnInit();
+    httpMock.expectOne('/categories').flush([]);
+    httpMock.expectOne('/companies').flush([]);
+    httpMock.expectOne(req => req.url === '/products').flush([]);
     expect(component).toBeTruthy();
   });
 
@@ -36,10 +40,13 @@ describe('App', () => {
 
     component.ngOnInit();
 
-    const req = httpMock.expectOne('/products');
+    httpMock.expectOne('/categories').flush([]);
+    httpMock.expectOne('/companies').flush([]);
+
+    const req = httpMock.expectOne(r => r.url === '/products');
     expect(req.request.method).toEqual('GET');
     req.flush(mockProducts);
 
-    expect(component.products).toEqual(mockProducts);
+    expect(component.products()).toEqual(mockProducts);
   });
-};
+});
