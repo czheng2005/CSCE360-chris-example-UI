@@ -16,9 +16,11 @@ builder.Services.AddHttpClient("ProductApi", client =>
     client.BaseAddress = new Uri(baseUrl);
 });
 
-builder.Services.AddHttpClient("Anthropic", client =>
+builder.Services.AddSingleton<McpClientProvider>();
+
+builder.Services.AddHttpClient("Gemini", client =>
 {
-    client.BaseAddress = new Uri("https://api.anthropic.com/");
+    client.BaseAddress = new Uri("https://generativelanguage.googleapis.com/");
 });
 
 builder.Services
