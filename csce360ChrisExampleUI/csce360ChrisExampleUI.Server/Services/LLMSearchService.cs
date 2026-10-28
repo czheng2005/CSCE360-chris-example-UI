@@ -1,52 +1,79 @@
-﻿using System.Text.Json;
+﻿using System.Net.Http.Json;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using csce360ChrisExampleUI.Server.Mcp;
-using ModelContextProtocol.Client;
+using csce360ChrisExampleUI.Server.Models;
+
 
 namespace csce360ChrisExampleUI.Server.Services
 {
-    public record NaturalLanguageSearchResult(string Summary, IEnumerable<object> Products);
+    public record NaturalLanguageSearchResult(string Summary, IEnumerable<ProductResult> Products);
 
+    // Runs a Gemini function-calling loop. Tool calls are dispatched straight to
+    // the ProductTools methods (the same ones exposed over /mcp), so there is no
+    // MCP client, loopback HTTP hop, or session lifecycle involved.
     public class NaturalLanguageSearchService
     {
+        private const int MaxTurns = 6;
+
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IConfiguration _configuration;
         private readonly ILogger<NaturalLanguageSearchService> _logger;
-        private readonly McpClientProvider _mcpClientProvider;
+        private readonly ProductTools _tools;
 
         public NaturalLanguageSearchService(
             IHttpClientFactory httpClientFactory,
             IConfiguration configuration,
             ILogger<NaturalLanguageSearchService> logger,
-            McpClientProvider mcpClientProvider)
+            ProductTools tools)
         {
             _httpClientFactory = httpClientFactory;
             _configuration = configuration;
             _logger = logger;
-            _mcpClientProvider = mcpClientProvider;
+            _tools = tools;
         }
+
+        // Hand-written Gemini declarations mirroring ProductTools. Parameterless
+        // tools deliberately omit "parameters" (Gemini rejects an OBJECT schema
+        // with no properties).
+        private static JsonArray BuildToolDeclarations() => JsonNode.Parse("""
+        [
+          {
+            "functionDeclarations": [
+              {
+                "name": "search_products",
+                "description": "Search products, optionally filtered by price range, category, on-sale status, and/or company name.",
+                "parameters": {
+                  "type": "OBJECT",
+                  "properties": {
+                    "minPrice":    { "type": "NUMBER",  "description": "Minimum price, inclusive. Omit for no lower bound." },
+                    "maxPrice":    { "type": "NUMBER",  "description": "Maximum price, inclusive. Omit for no upper bound." },
+                    "category":    { "type": "STRING",  "description": "Exact category name, e.g. 'Hardware'. Omit for all categories." },
+                    "onSale":      { "type": "BOOLEAN", "description": "True = only on-sale items, false = only non-sale items, omit for both." },
+                    "companyName": { "type": "STRING",  "description": "Exact company/vendor name. Omit for all companies." }
+                  }
+                }
+              },
+              {
+                "name": "list_categories",
+                "description": "List all distinct product category names. Use this to check valid values for search_products' category parameter before guessing."
+              },
+              {
+                "name": "list_companies",
+                "description": "List all distinct company/vendor names. Use this to check valid values for search_products' companyName parameter before guessing."
+              }
+            ]
+          }
+        ]
+        """)!.AsArray();
 
         public async Task<NaturalLanguageSearchResult> RunAsync(string userQuery, CancellationToken ct = default)
         {
             var apiKey = _configuration["Gemini:ApiKey"]
                 ?? throw new InvalidOperationException("Configuration value 'Gemini:ApiKey' was not found.");
-            var model = _configuration["Gemini:Model"] ?? "gemini-3.8-flash";
+            var model = "gemini-3.5-flash-lite";
 
-            var mcpClient = await _mcpClientProvider.GetClientAsync();
-
-            var mcpTools = await mcpClient.ListToolsAsync(cancellationToken: ct);
-
-            var functionDeclarations = new JsonArray(mcpTools.Select(t => (JsonNode)new JsonObject
-            {
-                ["name"] = t.Name,
-                ["description"] = t.Description,
-                ["parameters"] = ToGeminiSchema(JsonNode.Parse(t.JsonSchema.GetRawText())!)
-            }).ToArray());
-
-            var tools = new JsonArray
-            {
-                new JsonObject { ["functionDeclarations"] = functionDeclarations }
-            };
+            var tools = BuildToolDeclarations();
 
             var contents = new JsonArray
             {
@@ -71,19 +98,25 @@ namespace csce360ChrisExampleUI.Server.Services
             };
 
             var geminiClient = _httpClientFactory.CreateClient("Gemini");
-            List<object> lastResults = new();
-            const int maxTurns = 6;
+            var lastResults = new List<ProductResult>();
+            var url = $"v1beta/models/{model}:generateContent";
 
-            for (var turn = 0; turn < maxTurns; turn++)
+            for (var turn = 0; turn < MaxTurns; turn++)
             {
                 var requestBody = new JsonObject
                 {
-                    ["contents"] = JsonNode.Parse(contents.ToJsonString()),
-                    ["tools"] = JsonNode.Parse(tools.ToJsonString())
+                    // DeepClone: a JsonNode can only have one parent.
+                    ["contents"] = contents.DeepClone(),
+                    ["tools"] = tools.DeepClone()
                 };
 
-                var url = $"v1beta/models/{model}:generateContent?key={apiKey}";
-                var response = await geminiClient.PostAsJsonAsync(url, requestBody, ct);
+                using var request = new HttpRequestMessage(HttpMethod.Post, url)
+                {
+                    Content = JsonContent.Create(requestBody)
+                };
+                request.Headers.Add("x-goog-api-key", apiKey);
+
+                using var response = await geminiClient.SendAsync(request, ct);
 
                 if (!response.IsSuccessStatusCode)
                 {
@@ -95,28 +128,35 @@ namespace csce360ChrisExampleUI.Server.Services
                 var responseJson = await response.Content.ReadFromJsonAsync<JsonObject>(cancellationToken: ct)
                     ?? throw new InvalidOperationException("Empty response from Gemini API.");
 
-                var candidate = responseJson["candidates"]?.AsArray().FirstOrDefault()
-                    ?? throw new InvalidOperationException("Gemini returned no candidates.");
+                var candidate = responseJson["candidates"]?.AsArray().FirstOrDefault();
+                var modelParts = candidate?["content"]?["parts"]?.AsArray();
 
-                var modelParts = candidate["content"]!["parts"]!.AsArray();
+                if (modelParts is null)
+                {
+                    _logger.LogWarning(
+                        "Gemini returned no content. finishReason={Reason} promptFeedback={Feedback}",
+                        candidate?["finishReason"], responseJson["promptFeedback"]);
+                    return new NaturalLanguageSearchResult(
+                        "The model didn't return an answer. Try rephrasing your search.", lastResults);
+                }
+
+                // Echo the model's turn back verbatim (preserves thought signatures).
+                contents.Add(new JsonObject
+                {
+                    ["role"] = "model",
+                    ["parts"] = modelParts.DeepClone()
+                });
 
                 var functionCalls = modelParts
                     .Where(p => p?["functionCall"] is not null)
                     .ToList();
 
-                // Echo the model's turn back into the conversation history.
-                contents.Add(new JsonObject
-                {
-                    ["role"] = "model",
-                    ["parts"] = JsonNode.Parse(modelParts.ToJsonString())
-                });
-
                 if (functionCalls.Count == 0)
                 {
                     var summary = modelParts
-                        .Where(p => p?["text"] is not null)
-                        .Select(p => p!["text"]!.GetValue<string>())
-                        .FirstOrDefault() ?? "Here are the matching products.";
+                        .Select(p => p?["text"]?.GetValue<string>())
+                        .FirstOrDefault(t => !string.IsNullOrWhiteSpace(t))
+                        ?? "Here are the matching products.";
 
                     return new NaturalLanguageSearchResult(summary, lastResults);
                 }
@@ -127,41 +167,47 @@ namespace csce360ChrisExampleUI.Server.Services
                 {
                     var functionCall = call!["functionCall"]!;
                     var toolName = functionCall["name"]!.GetValue<string>();
-                    var argsNode = functionCall["args"] as JsonObject ?? new JsonObject();
+                    var args = functionCall["args"] as JsonObject ?? new JsonObject();
 
-                    var arguments = argsNode.ToDictionary(
-                        kvp => kvp.Key,
-                        kvp => (object?)JsonSerializer.Deserialize<object>(kvp.Value!.ToJsonString()));
+                    _logger.LogInformation("Tool call: {ToolName} {Args}", toolName, args.ToJsonString());
 
-                    _logger.LogInformation("MCP tool call: {ToolName} {Args}", toolName, argsNode.ToJsonString());
-
-                    var toolResult = await mcpClient.CallToolAsync(toolName, arguments, cancellationToken: ct);
-                    var resultText = string.Join("\n", toolResult.Content
-                        .Select(c => c.AsText())
-                        .Where(t => t is not null));
-
-                    if (toolName == "search_products")
-                    {
-                        try
-                        {
-                            lastResults = JsonSerializer.Deserialize<List<object>>(resultText) ?? lastResults;
-                        }
-                        catch (JsonException)
-                        {
-                            // leave lastResults as-is
-                        }
-                    }
-
-                    // Gemini expects functionResponse.response to be a JSON object,
-                    // so wrap raw tool output under a "result" key.
-                    JsonNode responsePayload;
+                    JsonNode? payload;
                     try
                     {
-                        responsePayload = new JsonObject { ["result"] = JsonNode.Parse(resultText) };
+                        object? result;
+                        switch (toolName)
+                        {
+                            case "search_products":
+                                var products = (await _tools.SearchProducts(
+                                    GetDecimal(args, "minPrice"),
+                                    GetDecimal(args, "maxPrice"),
+                                    GetString(args, "category"),
+                                    GetBool(args, "onSale"),
+                                    GetString(args, "companyName"))).ToList();
+                                lastResults = products;
+                                result = products;
+                                break;
+
+                            case "list_categories":
+                                result = await _tools.ListCategories();
+                                break;
+
+                            case "list_companies":
+                                result = await _tools.ListCompanies();
+                                break;
+
+                            default:
+                                result = new { error = $"Unknown tool '{toolName}'." };
+                                break;
+                        }
+
+                        payload = new JsonObject { ["result"] = JsonSerializer.SerializeToNode(result) };
                     }
-                    catch (JsonException)
+                    catch (Exception ex) when (ex is HttpRequestException or JsonException)
                     {
-                        responsePayload = new JsonObject { ["result"] = resultText };
+                        // Surface tool failures to the model instead of failing the whole request.
+                        _logger.LogError(ex, "Tool {ToolName} failed", toolName);
+                        payload = new JsonObject { ["error"] = ex.Message };
                     }
 
                     functionResponseParts.Add(new JsonObject
@@ -169,7 +215,7 @@ namespace csce360ChrisExampleUI.Server.Services
                         ["functionResponse"] = new JsonObject
                         {
                             ["name"] = toolName,
-                            ["response"] = responsePayload
+                            ["response"] = payload
                         }
                     });
                 }
@@ -182,74 +228,19 @@ namespace csce360ChrisExampleUI.Server.Services
             }
 
             return new NaturalLanguageSearchResult(
-                "I wasn't able to narrow this down in time — try rephrasing your search.",
+                "I wasn't able to narrow this down in time. Try rephrasing your search.",
                 lastResults);
         }
 
-        // Gemini's function-parameter schema is a restricted subset of OpenAPI 3.0.
-        // Strip anything MCP's JSON Schema output includes that Gemini doesn't
-        // understand (e.g. $schema, additionalProperties) and recurse into
-        // nested object/array schemas.
-        private static JsonNode ToGeminiSchema(JsonNode schema)
-        {
-            if (schema is not JsonObject obj)
-            {
-                return schema.DeepClone();
-            }
+        // --- Argument helpers: tolerate missing keys, explicit nulls, wrong types ---
 
-            var allowedKeys = new[] { "type", "description", "enum", "items", "properties", "required", "format", "nullable" };
-            var result = new JsonObject();
+        private static decimal? GetDecimal(JsonObject args, string key) =>
+            args[key] is JsonValue v && v.TryGetValue<decimal>(out var d) ? d : null;
 
-            foreach (var key in allowedKeys)
-            {
-                if (!obj.TryGetPropertyValue(key, out var value) || value is null)
-                {
-                    continue;
-                }
+        private static string? GetString(JsonObject args, string key) =>
+            args[key] is JsonValue v && v.TryGetValue<string>(out var s) && !string.IsNullOrWhiteSpace(s) ? s : null;
 
-                // Handle the "type" field specifically to prevent the list/array error
-                if (key == "type")
-                {
-                    string? typeString = null;
-
-                    if (value is JsonArray arr)
-                    {
-                        // If it's an array like ["string", "null"], take the first non-null type
-                        typeString = arr.Select(x => x?.GetValue<string>()).FirstOrDefault(x => x != "null");
-
-                        // If "null" was in the array, explicitly mark it as nullable for Gemini
-                        if (arr.Any(x => x?.GetValue<string>() == "null"))
-                        {
-                            result["nullable"] = true;
-                        }
-                    }
-                    else
-                    {
-                        typeString = value.GetValue<string>();
-                    }
-
-                    // Gemini expects uppercase type names (e.g., "STRING", "OBJECT", "ARRAY")
-                    result["type"] = typeString?.ToUpperInvariant() ?? "OBJECT";
-                    continue;
-                }
-
-                result[key] = key switch
-                {
-                    "items" => ToGeminiSchema(value),
-                    "properties" => new JsonObject(
-                        value.AsObject().Select(kvp =>
-                            new KeyValuePair<string, JsonNode?>(kvp.Key, ToGeminiSchema(kvp.Value!)))),
-                    _ => value.DeepClone()
-                };
-            }
-
-            // Gemini requires "type" to be present; default to "OBJECT" if omitted
-            if (!result.ContainsKey("type"))
-            {
-                result["type"] = "OBJECT";
-            }
-
-            return result;
-        }
+        private static bool? GetBool(JsonObject args, string key) =>
+            args[key] is JsonValue v && v.TryGetValue<bool>(out var b) ? b : null;
     }
 }

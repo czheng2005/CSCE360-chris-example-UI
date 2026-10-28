@@ -5,7 +5,7 @@ namespace csce360ChrisExampleUI.Server.Models
     {
         public string CompanyName { get; set; } = string.Empty;
         public string ProductName { get; set; } = string.Empty;
-        public int Price { get; set; }
+        public decimal Price { get; set; }   // was int; the API returns decimal
         public string Category { get; set; } = string.Empty;
         public bool OnSale { get; set; }
     }

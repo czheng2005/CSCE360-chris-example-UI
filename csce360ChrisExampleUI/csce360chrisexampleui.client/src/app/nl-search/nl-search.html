@@ -1,6 +1,7 @@
 <div class="nl-search">
   <p class="nl-search__intro">
-    Describe what you're looking for in plain language, e.g. "cheap electronics on sale from Acme Co".
+    Describe what you're looking for in plain language, e.g. "cheap electronics on sale from Acme
+    Co".
   </p>
 
   <form class="nl-search__form" (ngSubmit)="onSubmit()">
@@ -12,28 +13,32 @@
       name="query"
     ></textarea>
 
-    <button type="submit" class="nl-search__submit" [disabled]="submitting || !query.trim()">
-      {{ submitting ? 'Thinking…' : 'Search' }}
+    <button type="submit" class="nl-search__submit" [disabled]="submitting() || !query.trim()">
+      {{ submitting() ? 'Thinking…' : 'Search' }}
     </button>
   </form>
 
-  @if (errorMessage) {
-    <p class="error">{{ errorMessage }}</p>
+  @if (errorMessage()) {
+    <p class="error">{{ errorMessage() }}</p>
   }
 
-  @if (summary) {
-    <p class="nl-search__message">{{ summary }}</p>
+  @if (summary()) {
+    <p class="nl-search__message">{{ summary() }}</p>
   }
 
-  @if (results.length > 0) {
+  @if (results().length > 0) {
     <table>
       <thead>
         <tr>
-          <th>Company</th><th>Product</th><th>Category</th><th>Price</th><th>On Sale</th>
+          <th>Company</th>
+          <th>Product</th>
+          <th>Category</th>
+          <th>Price</th>
+          <th>On Sale</th>
         </tr>
       </thead>
       <tbody>
-        @for (product of results; track product.productName) {
+        @for (product of results(); track product.productName) {
           <tr>
             <td>{{ product.companyName }}</td>
             <td>{{ product.productName }}</td>

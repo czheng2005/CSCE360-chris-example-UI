@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, signal } from '@angular/core';
 import { Product, ProductService } from '../product.service';
 
 @Component({
@@ -9,10 +9,10 @@ import { Product, ProductService } from '../product.service';
 })
 export class NlSearch {
   query = '';
-  submitting = false;
-  errorMessage: string | null = null;
-  summary: string | null = null;
-  results: Product[] = [];
+  submitting = signal(false);
+  errorMessage = signal<string | null>(null);
+  summary = signal<string | null>(null);
+  results = signal<Product[]>([]);
 
   constructor(private productService: ProductService) {}
 
@@ -20,20 +20,20 @@ export class NlSearch {
     const trimmed = this.query.trim();
     if (!trimmed) return;
 
-    this.submitting = true;
-    this.errorMessage = null;
-    this.summary = null;
+    this.submitting.set(true);
+    this.errorMessage.set(null);
+    this.summary.set(null);
 
     this.productService.nlSearch(trimmed).subscribe({
       next: (result) => {
-        this.summary = result.summary;
-        this.results = result.products;
-        this.submitting = false;
+        this.summary.set(result.summary);
+        this.results.set(result.products);
+        this.submitting.set(false);
       },
       error: (err) => {
         console.error(err);
-        this.errorMessage = 'Something went wrong running that search.';
-        this.submitting = false;
+        this.errorMessage.set('Something went wrong running that search.');
+        this.submitting.set(false);
       }
     });
   }

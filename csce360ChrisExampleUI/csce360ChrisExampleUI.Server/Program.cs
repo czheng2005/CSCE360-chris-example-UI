@@ -16,16 +16,20 @@ builder.Services.AddHttpClient("ProductApi", client =>
     client.BaseAddress = new Uri(baseUrl);
 });
 
-builder.Services.AddSingleton<McpClientProvider>();
-
 builder.Services.AddHttpClient("Gemini", client =>
 {
     client.BaseAddress = new Uri("https://generativelanguage.googleapis.com/");
 });
 
+// ProductTools is injected directly into NaturalLanguageSearchService.
+builder.Services.AddTransient<ProductTools>();
+
+// The MCP endpoint is still exposed for external MCP clients (Inspector,
+// Claude Desktop, etc.), but the app itself no longer connects to it.
+// Stateless: the tools hold no per-session state.
 builder.Services
     .AddMcpServer()
-    .WithHttpTransport()
+    .WithHttpTransport(o => o.Stateless = true)
     .WithTools<ProductTools>();
 
 builder.Services.AddScoped<NaturalLanguageSearchService>();
